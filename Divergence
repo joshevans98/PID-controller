@@ -1,0 +1,71 @@
+```
+    // Assume index 0 is the latest day.
+    public static boolean hasMacdBullishDivergence(int days, Candles candles, boolean confirmed) {
+        if (candles.size() < 10) return false;
+        BarSeries barSeries = new BaseBarSeries();
+        for (int i = 0; i < candles.size(); i++) {
+            barSeries.addBar(candles.getDateAt(i), candles.getOpenAt(i), candles.getHighAt(i), candles.getLowAt(i), candles.getCloseAt(i));
+        }
+
+        MACDIndicator macd = new MACDIndicator(new ClosePriceIndicator(barSeries));
+
+        double[] histogramValues = new double[barSeries.getBarCount()];
+        double[] prices = new double[barSeries.getBarCount()];
+        for (int i = 0; i < barSeries.getBarCount(); i++) {
+            histogramValues[i] = macd.getValue(i).doubleValue();
+            prices[i] = candles.getLowAt(i);
+        }
+
+        FixedDecimalIndicator macdValues = new FixedDecimalIndicator(barSeries, histogramValues);
+        EMAIndicator signal = new EMAIndicator(macdValues, 9);
+
+        for (int i = 0; i < histogramValues.length; i++) {
+            histogramValues[i] = histogramValues[i] - signal.getValue(i).doubleValue();
+        }
+        ArrayUtils.reverse(prices);
+        ArrayUtils.reverse(histogramValues);
+
+        double latestIslandLow = 0;
+        double secondLatestIslandLow = 0;
+        double latestIslandPriceLow = 9999;
+        double secondLatestPriceLow = 9999;
+        int i = 0;
+
+        while (i < histogramValues.length && histogramValues[i] > 0) {
+            i++; // advance to first negative macd
+        }
+
+        if (i > days || (confirmed && i == 0) || (!confirmed && i > 0)) return false; // if i didn't move, then still red so not confirmed
+        if (i == 0) i++;
+
+        while(i < histogramValues.length) {
+            if (histogramValues[i] > 0 && histogramValues[i-1] < 0) {
+                // MACD Crossover from neg to pos, entering positive territory (in real life, it went from pos to neg)
+                break;
+            }
+            latestIslandLow = Math.min(histogramValues[i], latestIslandLow);
+            latestIslandPriceLow = Math.min(prices[i], latestIslandPriceLow);
+            i++;
+        }
+
+        while(i < histogramValues.length && histogramValues[i] > 0) {
+            i++; // advance to second negative macd
+        }
+
+        while(i < histogramValues.length) {
+            if (histogramValues[i] > 0 && histogramValues[i-1] < 0) {
+                // MACD Crossover from neg to pos, entering positive territory (in real life, it went from pos to neg)
+                break;
+            }
+
+            secondLatestIslandLow = Math.min(histogramValues[i], secondLatestIslandLow);
+            secondLatestPriceLow = Math.min(prices[i], secondLatestPriceLow);
+            i++;
+        }
+
+        boolean macdDecreased = secondLatestIslandLow > latestIslandLow;
+        boolean priceDecreased = secondLatestPriceLow > latestIslandPriceLow;
+
+        return (macdDecreased && !priceDecreased) || (!macdDecreased && priceDecreased);
+    }
+```
